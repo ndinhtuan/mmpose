@@ -13,6 +13,11 @@ from mmpose.apis import (get_track_id, inference_top_down_pose_model,
 from mmpose.core import apply_bugeye_effect, apply_sunglasses_effect
 from mmpose.utils import StopWatch
 
+from sensor_msgs.msg import CompressedImage
+from sensor_msgs.msg import Image
+
+import rospy
+
 try:
     from mmdet.apis import inference_detector, init_detector
     has_mmdet = True
@@ -151,6 +156,12 @@ def parse_args():
         action='store_true',
         help='Enable synchronous mode that video I/O and inference will be '
         'temporally aligned. Note that this will reduce the display FPS.')
+    
+    parser.add_argument(
+        "--background_path", 
+        type=str, 
+        default="background/bg.png", 
+        help="background image for visualizing")
 
     return parser.parse_args()
 
@@ -342,8 +353,11 @@ def display():
             # input ending signal
             if ts_input is None:
                 break
-
-            img = frame
+            
+            #img = frame
+            img = cv2.imread(args.background_path)
+            img = img * 0.3
+            img = np.array(img, dtype=np.uint8)
 
             # get pose estimation results
             if len(pose_result_queue) > 0:
@@ -488,8 +502,53 @@ def display():
         vid_out.release()
     event_exit.set()
 
+def color_callback(data): 
+
+    decoded = np.frombuffer(data.data, np.uint8)
+    h = 480
+    w = 640
+
+    img = np.reshape(decoded, (h,w, 3))
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    ts_input = time.time()
+
+    event_inference_done.clear()
+
+    with input_queue_mutex:
+        input_queue.append((ts_input, img))
+
+    frame_buffer.put((ts_input, img))
+
+    print("Hello")
+
+def color_callback_compressed(data):
+        
+    np_arr = np.fromstring(data.data, np.uint8)
+    img = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+    ts_input = time.time()
+
+    event_inference_done.clear()
+
+    with input_queue_mutex:
+        input_queue.append((ts_input, img))
+
+    frame_buffer.put((ts_input, img))
 
 def main():
+    
+    using_compressed_topic=False
+
+    if using_compressed_topic:
+        topic_color_img = "/camera/color/image_raw/compressed"
+    else:
+        topic_color_img = "/camera/color/image_raw"
+
+    if not using_compressed_topic:
+        print("Using normal topic")
+        rospy.Subscriber(topic_color_img, Image, color_callback)
+    else:
+        rospy.Subscriber(topic_color_img, CompressedImage, color_callback_compressed)
+    
     global args
     global frame_buffer
     global input_queue, input_queue_mutex
@@ -567,22 +626,24 @@ def main():
     try:
         event_exit = Event()
         event_inference_done = Event()
-        t_input = Thread(target=read_camera, args=())
+        #t_input = Thread(target=read_camera, args=())
         t_det = Thread(target=inference_detection, args=(), daemon=True)
         t_pose = Thread(target=inference_pose, args=(), daemon=True)
 
-        t_input.start()
+        #t_input.start()
         t_det.start()
         t_pose.start()
 
         # run display in the main thread
         display()
         # join the input thread (non-daemon)
-        t_input.join()
+        #t_input.join()
 
     except KeyboardInterrupt:
         pass
 
 
 if __name__ == '__main__':
+    rospy.init_node("mmpose_node")
     main()
+    rospy.spin()
