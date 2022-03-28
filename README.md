@@ -36,7 +36,7 @@
 </div>
 
 ## Run with ROS 
-    python demo/webcam_demo.py
+    python demo/webcam_demo_ros.py
 
 ## Introduction
 
