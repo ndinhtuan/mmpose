@@ -1,3 +1,4 @@
+
 <div align="center">
   <img src="resources/mmpose-logo.png" width="450"/>
   <div>&nbsp;</div>
@@ -33,6 +34,9 @@
 [🆕Update News](https://mmpose.readthedocs.io/en/v0.24.0/changelog.html) |
 [🤔Reporting Issues](https://github.com/open-mmlab/mmpose/issues/new/choose)
 </div>
+
+## Run with ROS 
+    python demo/webcam_demo.py
 
 ## Introduction
 
